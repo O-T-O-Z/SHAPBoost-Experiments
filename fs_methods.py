@@ -1,14 +1,16 @@
-"""Method registry used by run_selection.py.
+"""Feature selectors used in the revised experiments.
 
-At this stage the ORIGINAL selection methods and their original size rules
-(mean-importance threshold, cap at 100) are kept unchanged; they are only
-wrapped so that they run on the training part of the shared, saved splits.
-Point 3 replaces the stopping/size rules, point 4 adds the ablations.
-
-Every method: callable(X_train, y_train, task, seed) -> ordered list of feature ids.
+Every selector receives ONLY the (already preprocessed) training part of an outer
+split and returns an ordered list of feature indices. Wherever a subset size has
+to be chosen, it is chosen by the same inner 5-fold CV (``inner_cv_score``), with
+the inner folds seeded per outer repeat. No selector sees the outer test fold.
 """
 import numpy as np
-import pandas as pd
+from sklearn.linear_model import ElasticNetCV, LinearRegression
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import KFold, StratifiedKFold
+from sksurv.linear_model import CoxnetSurvivalAnalysis, CoxPHSurvivalAnalysis
+from sksurv.metrics import concordance_index_censored
 from sksurv.util import Surv
 
 MAX_FEATURES = 100
@@ -17,86 +19,214 @@ MAX_FEATURES = 100
 for _alias, _t in (("int", int), ("float", float), ("bool", bool)):
     if not hasattr(np, _alias):
         setattr(np, _alias, _t)
-
-XGB_SURV_PARAMS = {
-    "objective": "survival:aft", "eval_metric": "aft-nloglik", "learning_rate": 0.05,
-    "max_depth": 3, "min_child_weight": 50, "subsample": 1.0, "colsample_bynode": 1.0,
-    "aft_loss_distribution": "normal", "aft_loss_distribution_scale": 1,
-    "tree_method": "hist", "booster": "gbtree", "grow_policy": "lossguide",
-    "lambda": 0.01, "alpha": 0.02, "n_jobs": 1,
-}
+N_INNER = 5
 
 
+# --------------------------------------------------------------------------- #
+# shared inner-CV scorer (higher is better: -MAE for regression, C-index for survival)
+# --------------------------------------------------------------------------- #
 def to_surv(y):
     return Surv.from_arrays(event=np.isfinite(y[:, 1]), time=y[:, 0])
 
 
-def _original_size_rule(features, importances):
-    """Unchanged from perform_*_selection.py (replaced in point 3)."""
-    features, importances = list(features), np.asarray(importances)
-    if np.unique(importances).shape[0] != 1:
-        k = len(np.where(importances >= np.mean(importances))[0])
-        features = features[:k]
-    return [int(f) for f in features[:MAX_FEATURES]]
+def inner_folds(y, task, seed):
+    if task == "surv":
+        cv = StratifiedKFold(N_INNER, shuffle=True, random_state=seed)
+        return list(cv.split(np.zeros(len(y)), np.isfinite(y[:, 1])))
+    return list(KFold(N_INNER, shuffle=True, random_state=seed).split(np.zeros(len(y))))
 
 
-def _original(name):
+def _linear_model(task):
+    # Same evaluation model family for forward, backward and ranking+CV-k.
+    return LinearRegression() if task == "reg" else CoxPHSurvivalAnalysis(alpha=0.1)
+
+
+def inner_cv_score(X, y, cols, task, folds, model_factory=None):
+    if len(cols) == 0:
+        return -np.inf
+    model_factory = model_factory or (lambda: _linear_model(task))
+    scores = []
+    for tr, va in folds:
+        m = model_factory()
+        try:
+            if task == "reg":
+                m.fit(X[np.ix_(tr, cols)], y[tr].ravel())
+                scores.append(-mean_absolute_error(y[va].ravel(), m.predict(X[np.ix_(va, cols)])))
+            else:
+                m.fit(X[np.ix_(tr, cols)], to_surv(y[tr]))
+                s = to_surv(y[va])
+                risk = m.predict(X[np.ix_(va, cols)])
+                scores.append(concordance_index_censored(s["event"], s["time"], risk)[0])
+        except Exception:  # non-convergence etc.: candidate is not usable
+            return -np.inf
+    return float(np.mean(scores))
+
+
+# --------------------------------------------------------------------------- #
+# Point 3: forward / backward selection with inner-CV stopping
+# --------------------------------------------------------------------------- #
+def forward_cv(X, y, task, seed, epsilon=0.0, max_features=MAX_FEATURES):
+    """Greedy forward selection; stop when the best inner-CV gain is <= epsilon."""
+    folds = inner_folds(y, task, seed)
+    selected, remaining, best = [], list(range(X.shape[1])), -np.inf
+    while remaining and len(selected) < max_features:
+        scores = [inner_cv_score(X, y, selected + [f], task, folds) for f in remaining]
+        j = int(np.argmax(scores))
+        if scores[j] - best <= epsilon:
+            break
+        best = scores[j]
+        selected.append(remaining.pop(j))
+    return selected
+
+
+def backward_cv(X, y, task, seed, epsilon=0.0, max_features=MAX_FEATURES):
+    """Backward elimination; stop when every removal lowers inner-CV score by > epsilon.
+
+    The returned order is by importance: features whose removal would hurt
+    the inner-CV score most come first (so the evaluation curve is meaningful).
+    """
+    folds = inner_folds(y, task, seed)
+    remaining = list(range(X.shape[1]))
+    current = inner_cv_score(X, y, remaining, task, folds)
+    while len(remaining) > 1:
+        scores = [
+            inner_cv_score(X, y, [g for g in remaining if g != f], task, folds)
+            for f in remaining
+        ]
+        j = int(np.argmax(scores))
+        if scores[j] < current - epsilon and len(remaining) <= max_features:
+            break
+        current = scores[j]
+        remaining.pop(j)
+    drop_cost = [
+        current - inner_cv_score(X, y, [g for g in remaining if g != f], task, folds)
+        for f in remaining
+    ]
+    return [remaining[i] for i in np.argsort(drop_cost)[::-1]][:max_features]
+
+
+def choose_k_by_cv(ranking, X, y, task, seed, max_features=MAX_FEATURES):
+    """For pure rankers: pick the prefix size by the same inner CV (replaces the
+    'importance >= mean importance' rule)."""
+    ranking = list(ranking)[:max_features]
+    if not ranking:
+        return []
+    folds = inner_folds(y, task, seed)
+    ks = sorted({k for k in np.unique(np.geomspace(1, len(ranking), 25).astype(int))})
+    scores = [inner_cv_score(X, y, ranking[:k], task, folds) for k in ks]
+    return ranking[: ks[int(np.argmax(scores))]]
+
+
+# --------------------------------------------------------------------------- #
+# Point 3: penalized baselines (lasso / elastic net / penalized Cox)
+# --------------------------------------------------------------------------- #
+def elastic_net_select(X, y, task, seed, l1_ratio=1.0, max_features=MAX_FEATURES):
+    """l1_ratio=1 -> lasso / lasso-Cox; 0 < l1_ratio < 1 -> elastic net.
+    The penalty is chosen by inner 5-fold CV on the training fold."""
+    if task == "reg":
+        m = ElasticNetCV(l1_ratio=l1_ratio, cv=inner_folds(y, task, seed), n_alphas=100,
+                         max_iter=10000, random_state=seed).fit(X, y.ravel())
+        coef = m.coef_
+    else:
+        s = to_surv(y)
+        path = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alpha_min_ratio=0.01, n_alphas=50).fit(X, s)
+        alphas = path.alphas_
+        cv = np.zeros(len(alphas))
+        for tr, va in inner_folds(y, task, seed):
+            m = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alphas=alphas).fit(X[tr], s[tr])
+            for a_i, a in enumerate(alphas):
+                risk = m.predict(X[va], alpha=a)
+                cv[a_i] += concordance_index_censored(s[va]["event"], s[va]["time"], risk)[0]
+        best = alphas[int(np.argmax(cv))]
+        coef = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alphas=[best]).fit(X, s).coef_[:, 0]
+    nz = np.flatnonzero(np.abs(coef) > 1e-12)
+    return nz[np.argsort(-np.abs(coef[nz]))].tolist()[:max_features]
+
+
+# --------------------------------------------------------------------------- #
+# SHAPBoost under the same outer protocol (its own inner 5-fold CV stopping)
+# --------------------------------------------------------------------------- #
+def shapboost_select(X, y, task, seed, eval_model="linear", collinearity_check=False):
+    """SHAPBoost with the settings of the original experiments."""
+    from shapboost import SHAPBoostRegressor, SHAPBoostSurvivalRegressor
+    from xgboost import XGBRegressor
+
+    from xgb_survival_regressor import XGBSurvivalRegressor
+
+    if task == "reg":
+        cls, metric = SHAPBoostRegressor, "mae"
+        ranker = XGBRegressor(n_estimators=100, max_depth=20, n_jobs=1, random_state=seed)
+        if eval_model == "linear":
+            evaluator = LinearRegression()
+        else:
+            from sklearn.ensemble import GradientBoostingRegressor
+            evaluator = GradientBoostingRegressor(learning_rate=0.01, max_depth=4,
+                                                  n_iter_no_change=10, random_state=seed)
+    else:
+        cls, metric = SHAPBoostSurvivalRegressor, "c_index"
+        params = {"objective": "survival:aft", "eval_metric": "aft-nloglik",
+                  "learning_rate": 0.05, "max_depth": 3, "min_child_weight": 50,
+                  "aft_loss_distribution": "normal", "aft_loss_distribution_scale": 1,
+                  "tree_method": "hist", "lambda": 0.01, "alpha": 0.02, "n_jobs": 1,
+                  "random_state": seed}
+        ranker = XGBSurvivalRegressor(**params)
+        # Evaluation models as in the paper: penalized CoxPH ("SHAPBoost (CoxPH)") or
+        # RSF ("SHAPBoost (RSF)"). Both wrappers return higher = longer survival, the
+        # orientation SHAPBoost's C-index expects (fixed in point 1).
+        from test_utils import CoxPHWrapper, RandomSurvivalForestWrapper
+        if eval_model in ("rsf", "tree"):
+            evaluator = RandomSurvivalForestWrapper(random_state=seed)
+        else:
+            evaluator = CoxPHWrapper(penalizer=0.1)
+    sel = cls(
+        [ranker, evaluator], loss="adaptive", metric=metric, verbose=0,
+        number_of_folds=N_INNER,
+        siso_ranking_size=min(X.shape[1] - 1, 50), max_number_of_features=MAX_FEATURES,
+        siso_order=1, num_resets=1, epsilon=1e-10, use_shap=True,
+        collinearity_check=collinearity_check,
+    )
+    sel.fit(X, y)
+    return [int(f) for f in sel.selected_subset_]
+
+
+# --------------------------------------------------------------------------- #
+# registry: method name -> callable(X, y, task, seed) -> ordered feature list
+# --------------------------------------------------------------------------- #
+def _ranker(name):
     def run(X, y, task, seed):
         import test_utils as tu
-        from sklearn.ensemble import GradientBoostingRegressor
-        from sklearn.linear_model import LinearRegression
         from xgboost import XGBRegressor
-
-        from xgb_survival_regressor import XGBSurvivalRegressor
-
         if task == "reg":
-            xgb = lambda: XGBRegressor(n_estimators=100, max_depth=20, n_jobs=1,  # noqa: E731
-                                       random_state=seed)
-            if name == "SHAPBoost (LR)":
-                out = tu.train_shapboost(X, y, [xgb(), LinearRegression()])
-            elif name == "SHAPBoost (GBR)":
-                # random_state added: with n_iter_no_change the validation split is
-                # random, so the original (unseeded) setting was not reproducible.
-                out = tu.train_shapboost(X, y, [xgb(), GradientBoostingRegressor(
-                    learning_rate=0.01, max_depth=4, n_iter_no_change=10,
-                    random_state=seed)])
-            elif name == "SHAPBoost-C":
-                out = tu.train_shapboost_c(X, y, [xgb(), LinearRegression()])
-            elif name in ("Forward", "Backward"):
-                fn = tu.train_forward_selection if name == "Forward" else tu.train_backward_selection
-                out = fn(pd.DataFrame(X), pd.DataFrame(y), "reg")
-            elif name == "MRMR":
-                out = tu.train_mrmr(pd.DataFrame(X), pd.DataFrame(y), xgb())
-            else:
-                fn = {"XGBoost": tu.train_xgb, "P-value": tu.train_pvalue,
-                      "RReliefF": tu.train_relief, "Boruta": tu.train_boruta}[name]
-                out = fn(X, y, xgb())
+            xgb = XGBRegressor(n_estimators=100, max_depth=20, n_jobs=1, random_state=seed)
+            fn = {"XGBoost": tu.train_xgb, "P-value": tu.train_pvalue, "RReliefF": tu.train_relief,
+                  "MRMR": tu.train_mrmr, "Boruta": tu.train_boruta}[name]
+            args = (X, y) if name != "MRMR" else (__import__("pandas").DataFrame(X),
+                                                   __import__("pandas").Series(y.ravel()))
+            ranking, _ = fn(*args, xgb)
         else:
-            params = {**XGB_SURV_PARAMS, "random_state": seed}
-            if name in ("SHAPBoost (CoxPH)", "SHAPBoost (RSF)", "SHAPBoost-C"):
-                # Evaluation model as in the original concurrent script that produced the
-                # paper results: penalized CoxPH (RSF for the RSF variant).
-                ev = (tu.RandomSurvivalForestWrapper(random_state=42) if name == "SHAPBoost (RSF)"
-                      else tu.CoxPHWrapper(penalizer=0.1))
-                fn = tu.train_shapboost_c if name == "SHAPBoost-C" else tu.train_shapboost
-                out = fn(X, y, [XGBSurvivalRegressor(**params), ev], metric="c_index")
-            elif name in ("Forward", "Backward"):
-                fn = tu.train_forward_selection if name == "Forward" else tu.train_backward_selection
-                out = fn(X, y, "surv")
-            else:
-                fn = {"XGBoost": tu.train_xgb_survival, "P-value": tu.train_pvalue_survival}[name]
-                out = fn(X, y, XGBSurvivalRegressor(**params))
-        return _original_size_rule(*out)
+            from xgb_survival_regressor import XGBSurvivalRegressor
+            fn = {"XGBoost": tu.train_xgb_survival, "P-value": tu.train_pvalue_survival}[name]
+            ranking, _ = fn(X, y, XGBSurvivalRegressor(n_jobs=1, random_state=seed))
+        return choose_k_by_cv([int(r) for r in ranking], X, y, task, seed)
     return run
 
 
-REG_METHODS = ["RReliefF", "Boruta", "XGBoost", "MRMR", "P-value", "Forward", "Backward",
-               "SHAPBoost-C", "SHAPBoost (LR)", "SHAPBoost (GBR)"]
-SURV_METHODS = ["XGBoost", "P-value", "Forward", "Backward", "SHAPBoost-C",
-                "SHAPBoost (CoxPH)", "SHAPBoost (RSF)"]
-METHODS = {n: _original(n) for n in dict.fromkeys(REG_METHODS + SURV_METHODS)}
+METHODS = {
+    "Forward-CV": forward_cv,
+    "Backward-CV": backward_cv,
+    "Lasso": lambda X, y, t, s: elastic_net_select(X, y, t, s, l1_ratio=1.0),
+    "ElasticNet": lambda X, y, t, s: elastic_net_select(X, y, t, s, l1_ratio=0.5),
+    **{n: _ranker(n) for n in ["XGBoost", "P-value", "RReliefF", "MRMR", "Boruta"]},
+    "SHAPBoost": shapboost_select,
+    "SHAPBoost-C": lambda X, y, t, s: shapboost_select(X, y, t, s, collinearity_check=True),
+    "SHAPBoost-tree": lambda X, y, t, s: shapboost_select(X, y, t, s, eval_model="tree"),
+}
+
+
+# Rankers implemented for regression only (test_utils has no survival version).
+REG_ONLY = {"RReliefF", "MRMR", "Boruta"}
 
 
 def methods_for(task: str) -> list:
     """Default method list for a task (used by both selection runners)."""
-    return list(REG_METHODS if task == "reg" else SURV_METHODS)
+    return [m for m in METHODS if task == "reg" or m not in REG_ONLY]

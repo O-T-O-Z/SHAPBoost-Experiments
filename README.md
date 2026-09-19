@@ -33,6 +33,7 @@ python plot_curves.py    -d <dataset>               # feature-budget curves, all
 ```bash
 python evaluation_experiment1.py   # Experiment 1: SHAPBoost with linear vs tree evaluator
 python visualize_results.py        # main comparison (Figure 2 and 3) + full tables
+python plot_operating_points.py    # point 3: every method's size vs score, Pareto front
 ```
 
 Curves are no longer trimmed to the modal subset size. Each fold's curve holds the
@@ -40,3 +41,9 @@ test performance on its first 1..k selected features; a fold that stopped earlie
 carries its last value forward (the subset that method would use under a budget of
 k features), and k = 0 is the no-feature baseline. Every fold therefore counts at
 every k. The lower panel shows the distribution of selected subset sizes.
+
+Methods (`fs_methods.METHODS`): Forward-CV, Backward-CV, Lasso, ElasticNet
+(lasso-/elastic-net-Cox for survival), XGBoost, P-value, RReliefF, MRMR, Boruta
+(rankers: subset size chosen by inner 5-fold CV; RReliefF/MRMR/Boruta regression
+only), SHAPBoost, SHAPBoost-C, SHAPBoost-tree
+(SHAPBoost with GBR/RSF as evaluation model).
