@@ -144,15 +144,37 @@ def elastic_net_select(X, y, task, seed, l1_ratio=1.0, max_features=MAX_FEATURES
 
 
 # --------------------------------------------------------------------------- #
-# SHAPBoost under the same outer protocol (its own inner 5-fold CV stopping)
+# Point 4: SHAPBoost ablations — SHAP vs gain importance, with vs without reweighting
 # --------------------------------------------------------------------------- #
-def shapboost_select(X, y, task, seed, eval_model="linear", collinearity_check=False):
-    """SHAPBoost with the settings of the original experiments."""
+def _no_reweight(cls):
+    class NoReweight(cls):
+        def _update_weights(self, X, Y):
+            super()._update_weights(X, Y)  # keep internal bookkeeping identical
+            self._global_sample_weights = np.ones_like(self._global_sample_weights)
+
+    NoReweight.__name__ = cls.__name__ + "NoReweight"
+    return NoReweight
+
+
+SHAPBOOST_VARIANTS = {
+    # name: (use_shap, reweight)
+    "SHAPBoost": (True, True),
+    "SHAPBoost-noRW": (True, False),
+    "GainBoost": (False, True),
+    "GainBoost-noRW": (False, False),
+}
+
+
+def shapboost_select(X, y, task, seed, variant="SHAPBoost", eval_model="linear",
+                     collinearity_check=False):
+    """Identical search, ranking size, stopping rule and inner folds for every variant;
+    only the importance measure and the reweighting step differ."""
     from shapboost import SHAPBoostRegressor, SHAPBoostSurvivalRegressor
     from xgboost import XGBRegressor
 
     from xgb_survival_regressor import XGBSurvivalRegressor
 
+    use_shap, reweight = SHAPBOOST_VARIANTS[variant]
     if task == "reg":
         cls, metric = SHAPBoostRegressor, "mae"
         ranker = XGBRegressor(n_estimators=100, max_depth=20, n_jobs=1, random_state=seed)
@@ -178,11 +200,13 @@ def shapboost_select(X, y, task, seed, eval_model="linear", collinearity_check=F
             evaluator = RandomSurvivalForestWrapper(random_state=seed)
         else:
             evaluator = CoxPHWrapper(penalizer=0.1)
+    if not reweight:
+        cls = _no_reweight(cls)
     sel = cls(
         [ranker, evaluator], loss="adaptive", metric=metric, verbose=0,
-        number_of_folds=N_INNER,
+        number_of_folds=N_INNER, fold_random_state=seed,
         siso_ranking_size=min(X.shape[1] - 1, 50), max_number_of_features=MAX_FEATURES,
-        siso_order=1, num_resets=1, epsilon=1e-10, use_shap=True,
+        siso_order=1, num_resets=1, epsilon=1e-10, use_shap=use_shap,
         collinearity_check=collinearity_check,
     )
     sel.fit(X, y)
@@ -217,7 +241,8 @@ METHODS = {
     "Lasso": lambda X, y, t, s: elastic_net_select(X, y, t, s, l1_ratio=1.0),
     "ElasticNet": lambda X, y, t, s: elastic_net_select(X, y, t, s, l1_ratio=0.5),
     **{n: _ranker(n) for n in ["XGBoost", "P-value", "RReliefF", "MRMR", "Boruta"]},
-    "SHAPBoost": shapboost_select,
+    **{v: (lambda v: lambda X, y, t, s: shapboost_select(X, y, t, s, variant=v))(v)
+       for v in SHAPBOOST_VARIANTS},
     "SHAPBoost-C": lambda X, y, t, s: shapboost_select(X, y, t, s, collinearity_check=True),
     "SHAPBoost-tree": lambda X, y, t, s: shapboost_select(X, y, t, s, eval_model="tree"),
 }
