@@ -13,7 +13,9 @@ import argparse
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO)
+sys.path.insert(0, os.path.join(REPO, "slurm"))
 
 import numpy as np  # noqa: E402
 
@@ -28,7 +30,11 @@ EXCLUDE = {
     ("metabric_regression", "Backward-CV"),  # ~8 CPU-h per fold
     ("metabric_full", "Backward-CV"),        # far more with Cox models
 }
-R_DATASETS = ["breast_cancer", "whas500", "aids"]  # [B] is O(n^2); larger ones infeasible
+# [B] costs O(n^2) per boosting iteration and refits 100 times for stability selection:
+# measured ~1.75 h wall / 6.7 CPU-h per WHAS split (n_train = 450), so AIDS
+# (n_train = 1036, ~5x) would need ~1000 CPU-h for 30 splits, and NACD/NHANES/
+# SUPPORT/METABRIC far more. Report [B] on the datasets where it is feasible.
+R_DATASETS = ["breast_cancer", "whas500"]
 R_METHOD = "CIndexBoost-StabSel"
 
 
@@ -37,12 +43,28 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--all", action="store_true", help="list tasks even if a record exists")
     ap.add_argument("--datasets", nargs="*", default=None, help="restrict to these datasets")
+    ap.add_argument("--include-queued", action="store_true",
+                    help="also list tasks that are already queued or running")
+    ap.add_argument("--methods", nargs="*", default=None,
+                    help="restrict to these methods (incl. CIndexBoost-StabSel for [B])")
     args = ap.parse_args()
     os.makedirs("slurm/tasks", exist_ok=True)
 
     datasets = [(d, "reg") for d in REGRESSION_DATASETS] + [(d, "surv") for d in SURVIVAL_DATASETS]
     if args.datasets:
         datasets = [(d, t) for d, t in datasets if d in args.datasets]
+
+    # Tasks already in the queue (arrays submitted by this version keep a copy of
+    # their task lines in slurm/tasks/submitted/) are skipped, so resubmitting while
+    # jobs run never duplicates work.
+    queued = {}
+    if not args.include_queued:
+        from check_status import queued_tasks  # imported here: check_status imports us
+        queued = queued_tasks()
+        os.chdir(REPO)
+
+    def todo(ds, m, sid):
+        return args.all or not (os.path.exists(record_path(ds, m, sid)) or (ds, m, sid) in queued)
 
     sel, r_tasks = [], []
     for ds, task in datasets:
@@ -51,12 +73,12 @@ def main():
         for split in splits:
             sid = split["split_id"]
             for m in methods_for(task):
-                if (ds, m) in EXCLUDE:
+                if (ds, m) in EXCLUDE or (args.methods and m not in args.methods):
                     continue
-                if args.all or not os.path.exists(record_path(ds, m, sid)):
+                if todo(ds, m, sid):
                     sel.append((ds, task, m, sid))
-            if task == "surv" and ds in R_DATASETS:
-                if args.all or not os.path.exists(record_path(ds, R_METHOD, sid)):
+            if task == "surv" and ds in R_DATASETS and (not args.methods or R_METHOD in args.methods):
+                if todo(ds, R_METHOD, sid):
                     r_tasks.append((ds, sid))
 
     def write(name, rows):
@@ -67,6 +89,8 @@ def main():
     write("r_baseline", r_tasks)
     write("datasets", datasets)
     n_all = len(datasets) * 30
+    if queued:
+        print(f"skipped {len(queued)} tasks that are already queued or running")
     print(f"selection tasks to run: {len(sel)}   [B] tasks to run: {len(r_tasks)}   "
           f"datasets: {len(datasets)} ({n_all} splits in total)")
 

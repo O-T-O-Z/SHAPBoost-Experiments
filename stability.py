@@ -98,29 +98,41 @@ def main():
     for path in glob.glob(f"results/selection/{args.dataset}/*/*.json"):
         r = json.load(open(path))
         recs.setdefault(r["method"], []).append(r)  # outer folds: always all methods
+    os.makedirs("results/stability", exist_ok=True)
+    out = f"results/stability/{args.dataset}.csv"
     tables = [summarize(args.dataset, p, recs, "outer folds")]
 
+    def save():
+        """Written after every method, so a time-out keeps what was computed."""
+        res = pd.concat(tables)
+        res.to_csv(out, index=False)
+        return res
+
+    save()  # the cheap outer-fold analysis is on disk before the slow part starts
+
     if args.subsample:
-        rng = np.random.default_rng(2024)
-        sub = {}
-        for b in range(args.subsample):
-            idx = rng.choice(len(y), size=len(y) // 2, replace=False)
-            Xb = fit_preprocessor(X[idx]).transform(X[idx])
-            for m in args.methods or METHODS:
+        # method by method (not half-sample by half-sample): every finished method
+        # is saved, so a time-out costs only the method that was running.
+        for m in args.methods or METHODS:
+            rng = np.random.default_rng(2024)  # same half-samples for every method
+            runs = []
+            for b in range(args.subsample):
+                idx = rng.choice(len(y), size=len(y) // 2, replace=False)
+                Xb = fit_preprocessor(X[idx]).transform(X[idx])
                 t0, c0 = time.perf_counter(), time.process_time()
                 try:
                     f, st = METHODS[m](Xb, y[idx], args.task, 10_000 + b), "ok"
                 except Exception:
                     f, st = [], "failed"
-                sub.setdefault(m, []).append(dict(features=list(map(int, f)), status=st,
-                                                  wall_seconds=time.perf_counter() - t0,
-                                                  cpu_seconds=time.process_time() - c0))
-        tables.append(summarize(args.dataset, p, sub, f"{args.subsample} half-samples"))
+                runs.append(dict(features=list(map(int, f)), status=st,
+                                 wall_seconds=time.perf_counter() - t0,
+                                 cpu_seconds=time.process_time() - c0))
+            tables.append(summarize(args.dataset, p, {m: runs},
+                                    f"{args.subsample} half-samples"))
+            save()
+            print(f"{m}: {args.subsample} half-samples done", flush=True)
 
-    res = pd.concat(tables)
-    os.makedirs("results/stability", exist_ok=True)
-    res.to_csv(f"results/stability/{args.dataset}.csv", index=False)
-    print(res.round(3).to_string(index=False))
+    print(save().round(3).to_string(index=False))
 
 
 if __name__ == "__main__":
