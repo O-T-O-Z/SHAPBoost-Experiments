@@ -1,0 +1,1 @@
+{"split_id": "r1_f2", "repeat": 1, "fold": 2, "seed": 110, "test_hash": "030d60c3935e", "dataset": "aids", "task": "surv", "method": "ElasticNet", "code_version": "5be316b", "status": "ok", "features": [1, 17, 9, 8, 7, 19, 18, 20, 0, 14], "n_selected": 10, "wall_seconds": 0.6830633299978217, "cpu_seconds": 0.6771844790000001}

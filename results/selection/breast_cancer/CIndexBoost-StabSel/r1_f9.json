@@ -1,0 +1,1 @@
+{"split_id":"r1_f9","repeat":1,"fold":9,"seed":110,"test_hash":"be8489fadb7a","dataset":"breast_cancer","task":"surv","method":"CIndexBoost-StabSel","code_version":"R","wall_seconds":314.509,"cpu_seconds":1211.839,"status":"ok","features":[12],"n_selected":1,"q":9,"cutoff":0.75,"mstop_used":1500}

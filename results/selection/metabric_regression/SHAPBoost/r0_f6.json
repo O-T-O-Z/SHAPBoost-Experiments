@@ -1,0 +1,1 @@
+{"split_id": "r0_f6", "repeat": 0, "fold": 6, "seed": 84, "test_hash": "67ef508822ee", "dataset": "metabric_regression", "task": "reg", "method": "SHAPBoost", "code_version": "5be316b", "status": "ok", "features": [1, 124, 2, 376, 666, 256, 102, 482, 267, 297, 63], "n_selected": 11, "wall_seconds": 790.3912244869862, "cpu_seconds": 784.737425936}

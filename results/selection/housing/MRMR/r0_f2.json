@@ -1,0 +1,1 @@
+{"split_id": "r0_f2", "repeat": 0, "fold": 2, "seed": 84, "test_hash": "f2fc7d24e8ad", "dataset": "housing", "task": "reg", "method": "MRMR", "code_version": "5be316b", "status": "ok", "features": [0, 6, 1, 2, 5, 7, 3], "n_selected": 7, "wall_seconds": 0.7997289430350065, "cpu_seconds": 0.7029352359999996}

@@ -1,0 +1,1 @@
+{"split_id": "r0_f8", "repeat": 0, "fold": 8, "seed": 84, "test_hash": "41dfb9170e02", "dataset": "parkinsons", "task": "reg", "method": "SHAPBoost-tree", "code_version": "5be316b", "status": "ok", "features": [0, 16, 18, 7, 5, 11, 9, 2, 13], "n_selected": 9, "wall_seconds": 2542.661595749203, "cpu_seconds": 2529.0226598219997}

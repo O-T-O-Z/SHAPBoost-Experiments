@@ -1,0 +1,1 @@
+{"split_id": "r2_f4", "repeat": 2, "fold": 4, "seed": 1750, "test_hash": "5c935fe5c6ec", "dataset": "diabetes", "task": "reg", "method": "Lasso", "code_version": "5be316b", "status": "ok", "features": [2, 8, 3, 6, 1, 4, 9, 7], "n_selected": 8, "wall_seconds": 0.05937506607733667, "cpu_seconds": 0.058524173999999984}

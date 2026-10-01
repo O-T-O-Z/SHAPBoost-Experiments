@@ -1,0 +1,1 @@
+{"split_id": "r1_f8", "repeat": 1, "fold": 8, "seed": 110, "test_hash": "48cbd7e70922", "dataset": "parkinsons", "task": "reg", "method": "Lasso", "code_version": "5be316b", "status": "ok", "features": [0, 14, 16, 3, 4, 17, 18, 9, 11, 1, 13, 10, 15, 5, 6, 12, 8], "n_selected": 17, "wall_seconds": 0.12534083300852217, "cpu_seconds": 0.12273064599999994}

@@ -1,0 +1,1 @@
+{"split_id": "r2_f3", "repeat": 2, "fold": 3, "seed": 1750, "test_hash": "c86289e30558", "dataset": "crime", "task": "reg", "method": "SHAPBoost", "code_version": "5be316b", "status": "ok", "features": [50, 44, 3, 71, 133, 142, 8, 48, 90, 49, 43, 34, 31, 115, 60, 68], "n_selected": 16, "wall_seconds": 1584.5706590070622, "cpu_seconds": 1572.7410878580001}

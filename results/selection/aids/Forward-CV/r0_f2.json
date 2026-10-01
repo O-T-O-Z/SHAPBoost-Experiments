@@ -1,0 +1,1 @@
+{"split_id": "r0_f2", "repeat": 0, "fold": 2, "seed": 84, "test_hash": "680c1f947db2", "dataset": "aids", "task": "surv", "method": "Forward-CV", "code_version": "5be316b", "status": "ok", "features": [1, 8, 9, 18, 12, 19], "n_selected": 6, "wall_seconds": 31.735010448028333, "cpu_seconds": 31.521896107}

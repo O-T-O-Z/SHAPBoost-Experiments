@@ -1,0 +1,1 @@
+{"split_id": "r2_f3", "repeat": 2, "fold": 3, "seed": 1750, "test_hash": "220ab9c67ed4", "dataset": "diabetes", "task": "reg", "method": "Backward-CV", "code_version": "5be316b", "status": "ok", "features": [8, 2, 3, 4, 1, 5], "n_selected": 6, "wall_seconds": 0.19777159509249032, "cpu_seconds": 0.19547394699999998}

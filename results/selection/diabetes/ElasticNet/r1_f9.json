@@ -1,0 +1,1 @@
+{"split_id": "r1_f9", "repeat": 1, "fold": 9, "seed": 110, "test_hash": "b57540c9f1ed", "dataset": "diabetes", "task": "reg", "method": "ElasticNet", "code_version": "5be316b", "status": "ok", "features": [2, 8, 3, 1, 7, 6, 5, 9, 4, 0], "n_selected": 10, "wall_seconds": 0.05457682767882943, "cpu_seconds": 0.053894721999999895}

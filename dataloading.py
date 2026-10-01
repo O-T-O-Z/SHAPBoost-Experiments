@@ -67,7 +67,6 @@ def prepare_support() -> None:
     df.drop(object_columns.columns, axis=1, inplace=True)
     df = pd.concat([df, enc.fit_transform(object_columns)], axis=1)
 
-    df = df.fillna(df.median())
     X_support = df.drop(["death", "d.time"], axis=1)
     X_support = X_support.replace(True, 1).replace(False, 0)
 
@@ -75,7 +74,7 @@ def prepare_support() -> None:
     y_support = y_support.copy()
     y_support.loc[:, "lower_bound"] = y_support["d.time"].astype(float)
     y_support.loc[:, "upper_bound"] = y_support["d.time"].astype(float)
-    y_support.loc[y_support["death"] == 1, "upper_bound"] = np.inf
+    y_support.loc[y_support["death"] == 0, "upper_bound"] = np.inf
     y_support = y_support.drop(["death", "d.time"], axis=1)
 
     # combine the two datasets
@@ -95,7 +94,6 @@ def prepare_nhanes() -> None:
     )
     # fill missing values with median
     X = X.replace(True, 1).replace(False, 0)
-    X = X.fillna(X.median())
 
     df = pd.concat([X, y], axis=1)
     df.to_csv("datasets/nhanes_cleaned.csv", index=False)
@@ -279,7 +277,6 @@ def prepare_crime() -> None:
     X = pd.concat([X, enc.fit_transform(object_columns)], axis=1)
 
     X = X.astype(float)
-    X = X.fillna(X.median())
     y = y["violentPerPop"]
     y = y.astype(float)
     y = y.dropna()
@@ -352,7 +349,7 @@ def prepare_aids() -> None:
     X.drop(["txgrp_3", "txgrp_4"], axis=1, inplace=True)
     y["lower_bound"] = y["time"]
     y["upper_bound"] = y["time"]
-    y.loc[y["censor"] == 1, "upper_bound"] = np.inf
+    y.loc[~y["censor"].astype(bool), "upper_bound"] = np.inf
     y = y.drop(columns=["time", "censor"])
     df = pd.concat([X, y], axis=1)
     df.to_csv("datasets/aids_cleaned.csv", index=False)

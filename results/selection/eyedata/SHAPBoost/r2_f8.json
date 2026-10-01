@@ -1,0 +1,1 @@
+{"split_id": "r2_f8", "repeat": 2, "fold": 8, "seed": 1750, "test_hash": "a06663be3afc", "dataset": "eyedata", "task": "reg", "method": "SHAPBoost", "code_version": "5be316b", "status": "ok", "features": [152, 86, 154, 181, 139, 173, 53, 1, 101, 156, 155, 161, 12, 50, 66, 133, 117, 170], "n_selected": 18, "wall_seconds": 15.746022395323962, "cpu_seconds": 14.870360328}

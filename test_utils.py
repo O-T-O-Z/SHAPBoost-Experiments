@@ -275,37 +275,6 @@ def train_xgb_survival(X, y, clf):
     importances = [x[1] for x in imp_per_feat]
     return features, np.array(importances)
 
-
-def run_eval(X_train, X_val, y_train, y_val, all_features, evaluator):
-    eval_features = []
-    mae_per_added_feature = []
-    r2_per_added_feature = []
-    for feature in all_features:
-        eval_features.append(feature)
-        evaluator.fit(X_train[:, eval_features], y_train)
-        mae = mean_absolute_error(y_val, evaluator.predict(X_val[:, eval_features]))
-        r2 = r2_score(y_val, evaluator.predict(X_val[:, eval_features]))
-        mae_per_added_feature.append(mae)
-        r2_per_added_feature.append(r2)
-    return mae_per_added_feature, r2_per_added_feature
-
-
-def run_eval_survival(X_train, X_val, y_train, y_val, all_features, clf):
-    eval_features = []
-    cindex_per_added_feature = []
-    for feature in all_features:
-        eval_features.append(feature)
-        clf.fit(X_train[:, eval_features], y_train)
-        y_pred = clf.predict(X_val[:, eval_features])
-        if clf.get_params()["objective"] == "survival:cox":
-            y_pred = -y_pred
-        cindex = concordance_index(
-            y_val[:, 0], y_pred, (y_val[:, 0] == y_val[:, 1]).astype(int)
-        )
-        cindex_per_added_feature.append(cindex)
-    return cindex_per_added_feature
-
-
 class RandomSurvivalForestWrapper:
     def __init__(self, **args):
         self.clf = RandomSurvivalForest(**args)
@@ -318,7 +287,7 @@ class RandomSurvivalForestWrapper:
         self.clf.fit(X, y, **args)
 
     def predict(self, X):
-        return self.clf.predict(X)
+        return -self.clf.predict(X)
 
 
 class CoxPHWrapper:
@@ -336,4 +305,4 @@ class CoxPHWrapper:
         )
 
     def predict(self, X):
-        return self.clf.predict_median(X) * -1
+        return -np.asarray(self.clf.predict_log_partial_hazard(X)).ravel()

@@ -1,0 +1,1 @@
+{"split_id": "r0_f3", "repeat": 0, "fold": 3, "seed": 84, "test_hash": "fd1f9a2b34f3", "dataset": "whas500", "task": "surv", "method": "Lasso", "code_version": "5be316b", "status": "ok", "features": [1, 4, 8, 3, 6, 12, 11], "n_selected": 7, "wall_seconds": 0.3018659860827029, "cpu_seconds": 0.2989875030000002}

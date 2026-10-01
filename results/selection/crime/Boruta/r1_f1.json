@@ -1,0 +1,1 @@
+{"split_id": "r1_f1", "repeat": 1, "fold": 1, "seed": 110, "test_hash": "f3a4fe951514", "dataset": "crime", "task": "reg", "method": "Boruta", "code_version": "5be316b", "status": "ok", "features": [133, 148, 50, 92, 44, 112], "n_selected": 6, "wall_seconds": 302.0650381720625, "cpu_seconds": 299.585066822}

@@ -1,0 +1,1 @@
+{"split_id": "r1_f1", "repeat": 1, "fold": 1, "seed": 110, "test_hash": "afd5be09033e", "dataset": "housing", "task": "reg", "method": "SHAPBoost-tree", "code_version": "5be316b", "status": "ok", "features": [0, 5, 6, 1, 7, 2, 4], "n_selected": 7, "wall_seconds": 11937.20587565098, "cpu_seconds": 11851.683403422001}

@@ -1,0 +1,1 @@
+{"split_id":"r2_f6","repeat":2,"fold":6,"seed":1750,"test_hash":"8091187f5b97","dataset":"whas500","task":"surv","method":"CIndexBoost-StabSel","code_version":"R","wall_seconds":5184.297,"cpu_seconds":19935.642,"status":"ok","features":[1,4],"n_selected":2,"q":4,"cutoff":0.78,"mstop_used":3000}

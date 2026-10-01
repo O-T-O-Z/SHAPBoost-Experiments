@@ -1,495 +1,147 @@
-import json
+"""Main comparison: SHAPBoost vs. the strongest baselines on every dataset.
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
-from matplotlib.collections import LineCollection
+Per dataset, the figure shows SHAPBoost, SHAPBoost + collinearity check, and two
+baselines picked among the non-SHAPBoost methods:
+  * best performance: best mean score at the selected subset
+    (ties -> smaller median subset size);
+  * least features: smallest median subset size (ties -> better mean score).
+The table lists every method (baselines, SHAPBoost variants and ablations).
 
-from dataloading import load_regression_dataset, load_survival_dataset
+Adapted to the revised protocol (review point 2): reads results/evaluation/*.csv
+from run_evaluation.py; no folds are trimmed or dropped (see report_utils). The
+original tie-breaking picked the LARGEST subset among equally good baselines;
+the intended rule (smaller subset) is used here.
 
-pd.set_option("display.max_columns", None)
+Outputs
+  plots/Figure_<i>.pdf
+  results/tables/<task>_<evaluator>_<metric>.csv        mean ± sd (median k [IQR])
+  results/tables/<task>_<evaluator>_<metric>_long.csv   all statistics, numeric
+
+Usage: python visualize_results.py [--reg-metric R2|MAE] [--evaluators ...] [--datasets ...]
+"""
+import argparse
+import os
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
+
+import report_utils as ru  # noqa: E402
+
+COLORS = {
+    "SHAPBoost": "#1b1b3a",
+    "SHAPBoost-C": "#3a7a6a",
+    "best": "#e3735e",
+    "fewest": "#a3395f",
+}
+PLAN = [("reg", "LinearRegression"), ("surv", "CoxPH")]  # Figure 2 and 3 of the paper
+ALL_EVALUATORS = {"reg": ["LinearRegression", "GradientBoosting"],
+                  "surv": ["CoxPH", "RSF", "XGBoost-Cox"]}
 
 
-def trim_results(feature_selectors: dict, metric: str) -> dict:
-    """
-    Remove the results that have shorter sets than the mode and calculate the mean of the metric.
+def pick_baselines(stats: pd.DataFrame, metric: str):
+    """Return (best-performing, fewest-features) baseline method names."""
+    base = stats[~stats.method.map(ru.is_proposed)].dropna(subset=["mean"])
+    if base.empty:
+        return None, None
+    sign = -1 if ru.higher_is_better(metric) else 1
+    base = base.assign(_score=sign * base["mean"])
+    best = base.sort_values(["_score", "k_median"]).iloc[0].method
+    fewest = base.sort_values(["k_median", "_score"]).iloc[0].method
+    return best, fewest
 
-    :param feature_selectors: feature selectors dictionary.
-    :param metric: metric to calculate the mean.
-    :return: feature selectors dictionary with the mean of the metric.
-    """
-    for selector, results in feature_selectors.items():
-        if not results:
-            feature_selectors[selector] = []
+
+def plot_comparison(task, evaluator, datasets, metric, save_path):
+    main = ru.MAIN[task]
+    fig, axes, legend_ax = ru.make_grid(len(datasets))
+    rows = []
+    for ax, ds in zip(axes, datasets):
+        res = ru.load_results(ds, evaluator, task)
+        if res is None:
+            ax.set_title(f"{ru.DS_NAME[ds]} (not run yet)")
             continue
-        lengths = [len(lst) for lst in results[f"{metric}_per_fold"]]
-        if lengths == []:
-            feature_selectors[selector] = []
+        per_fold, curves = res
+        stats = ru.method_stats(per_fold, curves, metric)
+        best, fewest = pick_baselines(stats, metric)
+
+        lines = [(main, main, COLORS["SHAPBoost"], "-"),
+                 ("SHAPBoost-C", "SHAPBoost-C", COLORS["SHAPBoost-C"], "--")]
+        if best is not None and best == fewest:
+            lines.append((f"{best} (best & least)", best, COLORS["best"], "-."))
+        elif best is not None:
+            lines += [(best, best, COLORS["best"], "-"), (fewest, fewest, COLORS["fewest"], "-")]
+        lines = [ln for ln in lines if ln[1] in set(stats.method)]
+
+        n, p = ru.dataset_shape(ds, task)
+        title = f"{ru.DS_NAME[ds]}, $\\mathbf{{p={p}}}$, $\\mathbf{{n={n}}}$"
+        ru.draw_panel(ax, curves, stats, lines, metric, title, guide=main)
+        # per-panel legend names the actual baselines, as in the original figure
+        panel = [Line2D([0], [0], color=c, lw=2.5, ls=ls) for lbl, m, c, ls in lines
+                 if not ru.is_proposed(m)]
+        ax.legend(panel, [lbl for lbl, m, _, _ in lines if not ru.is_proposed(m)],
+                  loc="best", fontsize=10)
+        rows.append(stats.assign(dataset=ru.DS_NAME[ds], best_baseline=best,
+                                 fewest_baseline=fewest))
+
+    legend_ax.legend(
+        [Line2D([0], [0], color=COLORS[k], lw=2.5, ls="--" if k == "SHAPBoost-C" else "-")
+         for k in COLORS],
+        ["SHAPBoost", "SHAPBoost + collinearity check", "Best performance (SOTA)",
+         "Least features selected (SOTA)"],
+        loc="center", fontsize=14, handlelength=2.5)
+    fig.text(0.01, 0.003, ru.CAPTION, fontsize=8)
+    fig.tight_layout(rect=(0, 0.015, 1, 1))
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig.savefig(save_path)
+    plt.close(fig)
+
+    if rows:
+        long = pd.concat(rows, ignore_index=True)
+        long["cell"] = long.apply(ru.format_cell, axis=1, metric=metric)
+        wide = long.pivot(index="dataset", columns="method", values="cell")
+        order = [ru.DS_NAME[d] for d in datasets]
+        wide = wide.reindex([o for o in order if o in wide.index])
+        first = [c for c in (main, "SHAPBoost-C") if c in wide.columns]
+        proposed = sorted(c for c in wide.columns if ru.is_proposed(c) and c not in first)
+        baselines = sorted(c for c in wide.columns if not ru.is_proposed(c))
+        wide = wide[first + proposed + baselines]
+        base = f"results/tables/{task}_{evaluator}_{metric}"
+        ru.save_table(wide, f"{base}.csv")
+        ru.save_table(long.drop(columns="cell").set_index(["dataset", "method"]),
+                      f"{base}_long.csv")
+    print(f"saved {save_path}")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--reg-metric", choices=["R2", "MAE"], default="R2",
+                    help="regression metric (the original figures used R2)")
+    ap.add_argument("--evaluators", nargs="*", default=None,
+                    help="default: LinearRegression (reg) and CoxPH (surv), as in the paper; "
+                         "'all' for every evaluator")
+    ap.add_argument("--datasets", nargs="*", default=None)
+    args = ap.parse_args()
+
+    plan = PLAN
+    if args.evaluators == ["all"]:
+        plan = [(t, e) for t in ("reg", "surv") for e in ALL_EVALUATORS[t]]
+    elif args.evaluators:
+        plan = [(t, e) for t in ("reg", "surv") for e in ALL_EVALUATORS[t]
+                if e in args.evaluators]
+    for i, (task, evaluator) in enumerate(plan):
+        datasets = ru.REGRESSION_DATASETS if task == "reg" else ru.SURVIVAL_DATASETS
+        if args.datasets:
+            datasets = [d for d in datasets if d in args.datasets]
+        if not datasets:
             continue
-        mode = max(set(lengths), key=lengths.count)
-        for inner_key, lst_of_lsts in results.items():
-            if not isinstance(lst_of_lsts[0], list):
-                continue
-            equal_or_greater_than_mode = [
-                lst for lst in lst_of_lsts if len(lst) >= mode
-            ]
-            results[inner_key] = [lst[:mode] for lst in equal_or_greater_than_mode]
-        feature_selectors[selector][f"mean_{metric}"] = list(
-            np.mean(results[f"{metric}_per_fold"], axis=0)
-        )
-
-    return feature_selectors
-
-
-def reformat_dict(cell: dict) -> str:
-    """
-    Reformat the dictionary to a string with rate ± std.
-
-    :param cell: dictionary with rate and std.
-    :return: string with rate ± std.
-    """
-    if isinstance(cell, dict) and "rate" in cell and "std" in cell:
-        rounded_rate = round(cell["rate"] * 1000, 4)
-        rounded_sd = round(cell["std"] * 1000, 4)
-        return f"{rounded_rate:.2f} ± {rounded_sd:.2f}"
-    return cell
-
-
-def load_dataset_regression(dataset: str, clf: str) -> tuple:
-    """
-    Load the dataset and the results of the feature selection algorithms.
-
-    :param dataset: dataset name.
-    :param clf: classifier name.
-    :return: dataset and feature selectors.
-    """
-    X, y = load_regression_dataset(dataset)
-    with open(f"regression_features/{dataset}_{clf}.json") as f:
-        data = json.load(f)
-    return X, trim_results(data, "r2")
-
-
-def load_dataset_survival(dataset: str, clf: str) -> tuple:
-    """
-    Load the dataset and the results of the feature selection algorithms.
-
-    :param dataset: dataset name.
-    :param clf: classifier name.
-    :return: dataset and feature selectors.
-    """
-    X, y = load_survival_dataset(dataset)
-    with open(f"survival_features/{dataset}_{clf}.json") as f:
-        data = json.load(f)
-    return X, trim_results(data, "cindex")
-
-
-def format_results_dataframe(
-    results_df: pd.DataFrame, metric: str, datasets: list, ds_name_sub: dict
-) -> pd.DataFrame:
-    """
-    Format the results dataframe with performance values and feature counts.
-
-    :param results_df: DataFrame containing performance results
-    :param metric: Metric used for evaluation ('cindex' or 'r2')
-    :param datasets: List of dataset names
-    :param ds_name_sub: Dictionary mapping dataset names to display names
-    :return: Formatted DataFrame
-    """
-    # Add combined performance and feature count column
-    results_df["Value"] = (
-        results_df["Performance"].round(2).astype(str)
-        + " ("
-        + results_df["# Features"].astype(str)
-        + ")"
-        if metric == "cindex" or metric == "r2"
-        else results_df["Performance"].round(1).astype(str)
-        + " ("
-        + results_df["# Features"].astype(str)
-        + ")"
-    )
-
-    # Pivot and format DataFrame
-    results_df = results_df.pivot(
-        index="Dataset", columns="Feature Selector", values="Value"
-    ).reset_index()
-    results_df = results_df.set_index("Dataset")
-
-    # Sort by datasets
-    datasets.pop(1)
-    results_df = results_df.reindex([ds_name_sub[ds] for ds in datasets])
-
-    # Reorder SHAPBoost columns to front
-    shapboost_cols = [
-        "SHAPBoost (LR)",
-        "SHAPBoost (CoxPH)",
-        "SHAPBoost-C",
-    ]
-    for col in shapboost_cols:
-        if col in results_df.columns:
-            results_df = pd.concat(
-                [
-                    results_df[[col]],
-                    results_df.drop(columns=[col]),
-                ],
-                axis=1,
-            )
-
-    # Remove empty SHAPBoost variant columns
-    results_df = results_df.dropna(axis=1, how="all")
-
-    return results_df
-
-
-def find_smallest_and_best_performers(feature_selectors: dict, metric: str) -> list:
-    """
-    Find the smallest and best performing feature selectors. SHAPBoost is always included.
-
-    If multiple feature selectors have the same performance, the one with the smallest number of features is chosen.
-    If multiple feature selectors have the same number of features, the one with the best performance is chosen.
-
-    :param feature_selectors: feature selectors dictionary.
-    :return: list of feature selectors.
-    :param metric: metric to use for sorting.
-    """
-    # exclude SHAPBoost variants
-    feature_selectors = {
-        k: v for k, v in feature_selectors.items() if not k.startswith("SHAPBoost")
-    }
-    # Create list of tuples with (selector, (size, performance))
-    selector_stats = []
-    for selector, stats in feature_selectors.items():
-        if stats == []:
-            continue
-        size = len(stats[f"mean_{metric}"])  # Get length of mean_metric list
-        performance = stats[f"mean_{metric}"][-1]  # Get last mean metric value
-        selector_stats.append((selector, (size, performance)))
-
-    # Sort by size and performance separately
-    size_sorted = sorted(selector_stats, key=lambda x: x[1][0])
-    perf_sorted = sorted(
-        selector_stats,
-        key=lambda x: x[1][1],
-        reverse=metric == "cindex" or metric == "r2",
-    )
-    # Get smallest size selector, if multiple have same size pick best performing among those
-    smallest_size = size_sorted[0][1][0]
-    smallest_size_selectors = [s for s in size_sorted if s[1][0] == smallest_size]
-    size_smallest = (
-        min(smallest_size_selectors, key=lambda x: x[1][1])
-        if metric != "cindex" and metric != "r2"
-        else max(smallest_size_selectors, key=lambda x: x[1][1])
-    )
-
-    # Get best performing selector, if multiple have same performance pick smallest size among those
-    best_performance = perf_sorted[0][1][1]
-    best_performance_selectors = [s for s in perf_sorted if s[1][1] == best_performance]
-    performance_best = (
-        min(best_performance_selectors, key=lambda x: x[1][0])
-        if metric != "cindex" and metric != "r2"
-        else max(best_performance_selectors, key=lambda x: x[1][0])
-    )
-
-    return size_smallest[0], performance_best[0]
-
-
-def plot_multiplot(
-    datasets: list[str],
-    type_: str,
-    clf: str,
-    save_path: str,
-    metric: str,
-    yticks: dict = None,
-) -> None:
-    """
-    Plot the results of the feature selection algorithms for multiple datasets.
-
-    :param datasets: list of dataset names.
-    :param type_: type of the dataset (regression or survival).
-    :param clf: classifier name.
-    :param save_path: path to save the plot.
-    :param metric: metric to plot.
-    :param yticks: yticks for the plot.
-    """
-    datasets.insert(1, "empty")
-    if yticks is None:
-        yticks = {}
-    ds_name_sub = {
-        "metabric_full": "METABRIC",
-        "metabric_regression": "METABRIC",
-        "eyedata": "Eye Data",
-        "crime": "Crime",
-        "msd": "MSD",
-        "parkinsons": "Parkinson's",
-        "diabetes": "Diabetes",
-        "housing": "California Housing",
-        "breast_cancer": "Breast Cancer",
-        "nhanes": "NHANES",
-        "support": "SUPPORT",
-        "nacd": "NACD",
-        "aids": "AIDS",
-        "whas500": "WHAS",
-    }
-    colors = {
-        "Boruta": sns.color_palette("CMRmap", n_colors=7)[0],
-        "SHAPBoost-C": sns.color_palette("cubehelix", n_colors=6)[2],
-        "SHAPBoost (LR)": sns.color_palette("cubehelix", n_colors=6)[0],
-        "SHAPBoost (GBR)": sns.color_palette("cubehelix", n_colors=6)[0],
-        "SHAPBoost (CoxPH)": sns.color_palette("cubehelix", n_colors=6)[1],
-        "SHAPBoost (RSF)": sns.color_palette("cubehelix", n_colors=6)[1],
-        "Best performance (SOTA)": sns.color_palette("flare", n_colors=6)[0],
-        "Least features selected (SOTA)": sns.color_palette("flare", n_colors=6)[2],
-    }
-    sns.set_style("whitegrid")
-    rows = ((len(datasets) - 1) // 2) + 1
-    size = (16, 18) if len(datasets) > 4 else (18, 12)
-    fig, axes = plt.subplots(rows, 2, figsize=size)
-    dataset_loader = (
-        load_dataset_regression if type_ == "regression" else load_dataset_survival
-    )
-    axes = axes.flatten()
-    sns.despine()
-    get_yticks = yticks == {}
-
-    if get_yticks:
-        yticks = [None] * len(datasets)
-    results_df = pd.DataFrame(
-        columns=["Dataset", "Feature Selector", "Performance", "# Features"]
-    )
-
-    for i, ds in enumerate(datasets):
-        if ds == "empty":
-            continue
-        X, feature_selectors = dataset_loader(ds, clf)
-        (
-            smallest_feature_selector,
-            best_feature_selector,
-        ) = find_smallest_and_best_performers(feature_selectors, metric)
-        all_feature_selectors = feature_selectors.copy()
-        feature_selectors = {
-            k: v
-            for k, v in feature_selectors.items()
-            if k
-            in [
-                "SHAPBoost-C",
-                "SHAPBoost (LR)",
-                "SHAPBoost (CoxPH)",
-                smallest_feature_selector,
-                best_feature_selector,
-            ]
-            and v != []
-        }
-
-        for feat_selector, res in feature_selectors.items():
-            selector = (
-                "Best performance (SOTA)"
-                if feat_selector == best_feature_selector
-                else (
-                    "Least features selected (SOTA)"
-                    if feat_selector == smallest_feature_selector
-                    else feat_selector
-                )
-            )
-
-            x_values = np.array(range(1, len(res[f"mean_{metric}"]) + 1))
-            y_values = np.array(res[f"mean_{metric}"])
-            points = np.array([x_values, y_values]).T.reshape(-1, 1, 2)
-            segments = np.concatenate([points[:-1], points[1:]], axis=1)
-
-            # Create alternating colors
-
-            color = colors[selector]
-            if feat_selector == best_feature_selector == smallest_feature_selector:
-                color1 = colors["Best performance (SOTA)"]
-                color2 = colors["Least features selected (SOTA)"]
-                segment_colors = []
-                for seg_idx in range(len(segments)):
-                    segment_colors.append(color1 if seg_idx % 2 == 0 else color2)
-
-                lc = LineCollection(
-                    segments, colors=segment_colors, linewidth=2.5, alpha=1
-                )
-                axes[i].add_collection(lc)
-
-                # Add to legend
-                axes[i].plot([], [], color=color1, label=selector, linewidth=2.5)
-                axes[i].plot(
-                    [], [], color=color2, label=f"{selector} (alt)", linewidth=2.5
-                )
-            else:
-                axes[i].plot(
-                    range(1, len(res[f"mean_{metric}"]) + 1),
-                    res[f"mean_{metric}"],
-                    label=selector,
-                    linewidth=2.5,
-                    color=color,
-                    alpha=1,
-                )
-            # plot a dot at the end of the line
-            axes[i].plot(
-                len(res[f"mean_{metric}"]),
-                res[f"mean_{metric}"][-1],
-                "o",
-                color=color,
-                zorder=100 if feat_selector == smallest_feature_selector else 0,
-            )
-        # Create legend with original feature selector names
-        handles = []
-        labels = []
-        for label, selector in [
-            ("Best performance (SOTA)", best_feature_selector),
-            ("Least features selected (SOTA)", smallest_feature_selector),
-        ]:
-            line = plt.Line2D([0], [0], color=colors[label], linewidth=2.5)
-            handles.append(line)
-            labels.append(selector)
-        axes[i].legend(
-            handles, labels, loc="upper right", fontsize=12, fancybox=True, shadow=False
-        )
-        if get_yticks:
-            yticks[i] = axes[i].get_yticks()
-        old_ticks = axes[i].get_yticks()
-        if max(old_ticks) > max(yticks[i]) or min(old_ticks) < min(yticks[i]):
-            yticks[i] = old_ticks
-        axes[i].set_yticks(yticks[i])
-
-        n, p = X.shape
-        label = "SHAPBoost (LR)" if metric == "r2" else "SHAPBoost (CoxPH)"
-        axes[i].axvline(
-            x=len(feature_selectors[label][f"mean_{metric}"]),
-            color=colors[label],
-            linewidth=2.5,
-            linestyle="--",
-            alpha=0.25,
-            zorder=0,
-        )
-        axes[i].axhline(
-            y=feature_selectors[label][f"mean_{metric}"][-1],
-            color=colors[label],
-            linewidth=2.5,
-            linestyle="--",
-            alpha=0.25,
-            zorder=0,
-        )
-
-        # make the title bold
-        axes[i].set_title(
-            f"{ds_name_sub[ds]}, $\\mathbf{{p={p}}}$, $\\mathbf{{n={n}}}$",
-            fontdict={"weight": "bold"},
-        )
-
-        if metric == "r2":
-            label = "R$^2$"
-            axes[i].set_yticks(np.arange(0, 1.1, 0.1))
-            axes[i].set_ylim(0, 1)
-        elif metric == "cindex":
-            label = "C-Index"
-            axes[i].set_yticks(np.arange(0.45, 1.1, 0.1))
-            axes[i].set_ylim(0.45, 0.9)
-        axes[i].set_ylabel(label, fontsize=12)
-        axes[i].set_xlabel("Number of Features", fontsize=12)
-        axes[i].tick_params(axis="y", labelcolor="black", labelsize=12)
-        axes[i].tick_params(axis="x", labelcolor="black", labelsize=12)
-        lines, labels = axes[i].get_legend_handles_labels()
-        # reorder legend such that SHAPBoost is first
-        for lab in [la for la in labels if la.startswith("SHAPBoost")]:
-            idx = labels.index(lab)
-            if lab == "SHAPBoost-C":
-                new_lab = "SHAPBoost + Collinearity check"
-                labels.pop(idx)
-            elif lab.startswith("SHAPBoost"):
-                new_lab = "SHAPBoost"
-                labels.pop(idx)
-            lines.insert(0, lines.pop(idx))
-            labels.insert(0, new_lab)
-
-        max_lim = 100 if p > 100 else p
-        axes[i].set_xlim(1, max_lim + 1)
-        axes[i].xaxis.set_major_locator(plt.MaxNLocator(integer=True))
-        # Make axis lines thicker to match plot lines
-        for spine in axes[i].spines.values():
-            spine.set_linewidth(2.5)
-        # remove the grid
-        axes[i].grid(False)
-        for feat_selector, res in all_feature_selectors.items():
-            if res == []:
-                continue
-            results_df = pd.concat(
-                [
-                    results_df,
-                    pd.DataFrame(
-                        {
-                            "Dataset": [ds_name_sub[ds]],
-                            "Feature Selector": [feat_selector],
-                            "Performance": res[f"mean_{metric}"][-1],
-                            "# Features": len(res[f"mean_{metric}"]),
-                        }
-                    ),
-                ],
-                ignore_index=True,
-            )
-    results_df = format_results_dataframe(results_df, metric, datasets, ds_name_sub)
-    results_df.to_csv(f"results/{type_}_{clf}_{metric}.csv", index=True, sep=";")
-
-    # remove empty plot
-    axes[1].axis("off")
-    axes[1].legend(
-        lines,
-        labels,
-        fancybox=True,
-        shadow=False,
-        ncol=1,
-        fontsize=14,
-        prop={"size": 14},
-        loc="center",
-        handleheight=1.5,
-        handlelength=2,
-        markerscale=2,
-    )
-    plt.tight_layout()
-    plt.savefig(save_path)
-    return yticks
+        metric = args.reg_metric if task == "reg" else "C-index"
+        name = f"Figure_{i + 2}" if plan is PLAN else f"Figure_comparison_{evaluator}"
+        plot_comparison(task, evaluator, datasets, metric, f"plots/{name}.pdf")
 
 
 if __name__ == "__main__":
-    survival_datasets = [
-        "metabric_full",
-        "breast_cancer",
-        "nhanes",
-        "support",
-        "nacd",
-        "aids",
-        "whas500",
-    ]
-    regression_datasets = [
-        "metabric_regression",
-        "eyedata",
-        "crime",
-        "msd",
-        "parkinsons",
-        "diabetes",
-        "housing",
-    ]
-    datasets = [regression_datasets, survival_datasets]
-
-    for i, to_plot in enumerate(
-        [
-            ("regression", "LinearRegression"),
-            # ("regression", "GradientBoostingRegressor"), # noqa
-            ("survival", "CoxPHFitter"),
-            # ("survival", "RandomSurvivalForest"), # noqa
-            # ("survival", "XGBSurvivalRegressor"), # noqa
-        ]
-    ):
-        type_, clf = to_plot
-        datasets = survival_datasets if type_ == "survival" else regression_datasets
-        metric = "r2" if type_ == "regression" else "cindex"
-        if clf == "GradientBoostingRegressor":
-            plot_multiplot(
-                datasets, type_, clf, f"plots/Figure_{i+2}.pdf", metric, yticks  # noqa
-            )
-            yticks = {}
-        else:
-            yticks = plot_multiplot(
-                datasets, type_, clf, f"plots/Figure_{i+2}.pdf", metric
-            )
+    main()

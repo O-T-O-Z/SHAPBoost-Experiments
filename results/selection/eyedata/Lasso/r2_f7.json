@@ -1,0 +1,1 @@
+{"split_id": "r2_f7", "repeat": 2, "fold": 7, "seed": 1750, "test_hash": "a88ef4e1cbe9", "dataset": "eyedata", "task": "reg", "method": "Lasso", "code_version": "5be316b", "status": "ok", "features": [152, 61, 53, 86, 199, 179, 186, 184, 135, 145, 41, 139, 180, 75, 160, 89, 98, 126], "n_selected": 18, "wall_seconds": 1.7150666639208794, "cpu_seconds": 1.704860337}

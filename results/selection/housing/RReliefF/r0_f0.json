@@ -1,0 +1,1 @@
+{"split_id": "r0_f0", "repeat": 0, "fold": 0, "seed": 84, "test_hash": "c5b345b273b6", "dataset": "housing", "task": "reg", "method": "RReliefF", "code_version": "5be316b", "status": "ok", "features": [7, 6, 0, 1, 4, 2, 3, 5], "n_selected": 8, "wall_seconds": 174.81206573802046, "cpu_seconds": 173.64230363399997}

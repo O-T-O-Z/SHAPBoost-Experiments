@@ -1,0 +1,1 @@
+{"split_id": "r0_f9", "repeat": 0, "fold": 9, "seed": 84, "test_hash": "3d9fb35ea30d", "dataset": "breast_cancer", "task": "surv", "method": "ElasticNet", "code_version": "5be316b", "status": "ok", "features": [18, 13, 14, 78, 74, 26, 61, 9, 66, 27, 68, 12, 48, 10, 30, 35, 42, 40, 8, 41], "n_selected": 20, "wall_seconds": 0.5091110072098672, "cpu_seconds": 0.5061934360000002}

@@ -1,0 +1,1 @@
+{"split_id": "r2_f1", "repeat": 2, "fold": 1, "seed": 1750, "test_hash": "342ff7217c1c", "dataset": "eyedata", "task": "reg", "method": "GainBoost-noRW", "code_version": "5be316b", "status": "ok", "features": [152, 5, 51, 187, 112, 84, 13, 139, 89, 49, 131, 63, 27], "n_selected": 13, "wall_seconds": 12.689622425008565, "cpu_seconds": 12.513828236000002}

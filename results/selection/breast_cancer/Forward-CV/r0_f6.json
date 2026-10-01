@@ -1,0 +1,1 @@
+{"split_id": "r0_f6", "repeat": 0, "fold": 6, "seed": 84, "test_hash": "e6e92f77ecb0", "dataset": "breast_cancer", "task": "surv", "method": "Forward-CV", "code_version": "5be316b", "status": "ok", "features": [9, 77, 48, 13, 18, 78, 54, 25, 61, 81, 8, 34, 47, 79, 24, 20, 40, 75, 17], "n_selected": 19, "wall_seconds": 114.89501315495, "cpu_seconds": 114.031952934}

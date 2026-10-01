@@ -1,0 +1,1 @@
+{"split_id": "r0_f3", "repeat": 0, "fold": 3, "seed": 84, "test_hash": "5b5e9867057f", "dataset": "breast_cancer", "task": "surv", "method": "Lasso", "code_version": "5be316b", "status": "ok", "features": [78, 18, 12, 74, 13, 66, 47, 26, 77, 29, 9, 48, 14, 61, 34, 8, 42, 41, 16, 35, 4, 10], "n_selected": 22, "wall_seconds": 1.5610231449827552, "cpu_seconds": 1.544642412}

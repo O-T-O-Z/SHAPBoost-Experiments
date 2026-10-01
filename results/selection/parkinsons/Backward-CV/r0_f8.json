@@ -1,0 +1,1 @@
+{"split_id": "r0_f8", "repeat": 0, "fold": 8, "seed": 84, "test_hash": "41dfb9170e02", "dataset": "parkinsons", "task": "reg", "method": "Backward-CV", "code_version": "5be316b", "status": "ok", "features": [0, 16, 18, 14, 3, 15, 8, 17, 7, 5, 9, 6, 4, 11], "n_selected": 14, "wall_seconds": 1.4481015501078218, "cpu_seconds": 1.4267178969999996}
