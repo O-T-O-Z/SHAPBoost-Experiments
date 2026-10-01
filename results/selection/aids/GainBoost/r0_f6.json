@@ -1,0 +1,1 @@
+{"split_id": "r0_f6", "repeat": 0, "fold": 6, "seed": 84, "test_hash": "55d68ebd9f56", "dataset": "aids", "task": "surv", "method": "GainBoost", "code_version": "9309a8e", "status": "ok", "features": [1, 7, 10, 12, 19], "n_selected": 5, "wall_seconds": 22.774896932998672, "cpu_seconds": 22.213799788000003}

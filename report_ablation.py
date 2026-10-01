@@ -14,10 +14,10 @@
    run_selection.py, i.e. sequential, for the timing runs).
 
 Outputs
-  plots/point4_ablation_<task>_<evaluator>.pdf
-  results/tables/point4_ablation_<task>_<evaluator>_<metric>.csv
-  plots/point4_stability_runtime_<task>.pdf
-  results/tables/point4_stability_runtime.csv
+  plots/ablation_<task>_<evaluator>.pdf
+  results/tables/ablation_<task>_<evaluator>_<metric>.csv
+  plots/stability_runtime_<task>.pdf
+  results/tables/stability_runtime.csv
 
 Usage: python report_ablation.py [--reg-metric R2|MAE] [--evaluators ...] [--datasets ...]
 """
@@ -141,11 +141,11 @@ def plot_ablation(task, evaluator, datasets, metric):
                  "splits, 95% CI from the Nadeau–Bengio corrected t-test", fontsize=10)
     fig.tight_layout()
     os.makedirs("plots", exist_ok=True)
-    fig.savefig(f"plots/point4_ablation_{task}_{evaluator}.pdf")
+    fig.savefig(f"plots/ablation_{task}_{evaluator}.pdf")
     plt.close(fig)
     ru.save_table(tab.set_index(["dataset", "variant"]),
-                  f"results/tables/point4_ablation_{task}_{evaluator}_{metric}.csv")
-    print(f"saved plots/point4_ablation_{task}_{evaluator}.pdf")
+                  f"results/tables/ablation_{task}_{evaluator}_{metric}.csv")
+    print(f"saved plots/ablation_{task}_{evaluator}.pdf")
 
 
 def stability_runtime(datasets_by_task):
@@ -175,7 +175,7 @@ def stability_runtime(datasets_by_task):
         return
     tab = pd.concat(rows, ignore_index=True)
     ru.save_table(tab.set_index(["task", "dataset", "method"]),
-                  "results/tables/point4_stability_runtime.csv")
+                  "results/tables/stability_runtime.csv")
 
     for task in tab.task.unique():
         t = tab[tab.task == task]
@@ -208,9 +208,9 @@ def stability_runtime(datasets_by_task):
             ax.grid(alpha=0.3, axis="x")
         axes[0, 0].legend(fontsize=7, loc="upper left", bbox_to_anchor=(0, -0.08), ncol=4)
         fig.tight_layout()
-        fig.savefig(f"plots/point4_stability_runtime_{task}.pdf")
+        fig.savefig(f"plots/stability_runtime_{task}.pdf")
         plt.close(fig)
-        print(f"saved plots/point4_stability_runtime_{task}.pdf")
+        print(f"saved plots/stability_runtime_{task}.pdf")
 
 
 def main():

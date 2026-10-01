@@ -1,0 +1,1 @@
+{"split_id": "r1_f2", "repeat": 1, "fold": 2, "seed": 110, "test_hash": "c09529ec6c9c", "dataset": "diabetes", "task": "reg", "method": "RReliefF", "code_version": "5be316b", "status": "ok", "features": [8, 2, 6, 0, 3, 4, 5, 7, 9, 1], "n_selected": 10, "wall_seconds": 1.0256777280010283, "cpu_seconds": 0.9215119549999997}

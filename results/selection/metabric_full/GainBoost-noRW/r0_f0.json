@@ -1,0 +1,1 @@
+{"split_id": "r0_f0", "repeat": 0, "fold": 0, "seed": 84, "test_hash": "66d6cc819e8e", "dataset": "metabric_full", "task": "surv", "method": "GainBoost-noRW", "code_version": "5be316b", "status": "ok", "features": [124, 0, 1, 173, 467, 397, 118, 228, 380, 306], "n_selected": 10, "wall_seconds": 455.60445246705785, "cpu_seconds": 450.080129523}

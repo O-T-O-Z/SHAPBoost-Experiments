@@ -1,0 +1,1 @@
+{"split_id": "r2_f5", "repeat": 2, "fold": 5, "seed": 1750, "test_hash": "9df5b5cd1ca2", "dataset": "whas500", "task": "surv", "method": "SHAPBoost", "code_version": "9309a8e", "status": "ok", "features": [1, 4, 6, 8, 3], "n_selected": 5, "wall_seconds": 19.983785628108308, "cpu_seconds": 19.755801247}

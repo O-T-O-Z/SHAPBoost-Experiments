@@ -1,0 +1,1 @@
+{"split_id": "r1_f4", "repeat": 1, "fold": 4, "seed": 110, "test_hash": "578a55762a1a", "dataset": "parkinsons", "task": "reg", "method": "GainBoost-noRW", "code_version": "5be316b", "status": "ok", "features": [0, 15, 16, 18, 17, 9, 14], "n_selected": 7, "wall_seconds": 42.94748456298839, "cpu_seconds": 42.634386637}

@@ -1,0 +1,1 @@
+{"split_id": "r2_f2", "repeat": 2, "fold": 2, "seed": 1750, "test_hash": "685246b3fb79", "dataset": "parkinsons", "task": "reg", "method": "ElasticNet", "code_version": "5be316b", "status": "ok", "features": [0, 14, 3, 16, 7, 18, 17, 5, 11, 12, 9, 6, 4, 1, 2, 8, 13, 10, 15], "n_selected": 19, "wall_seconds": 0.1284799079876393, "cpu_seconds": 0.12747227000000017}

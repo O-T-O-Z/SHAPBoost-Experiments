@@ -1,0 +1,1 @@
+{"split_id": "r2_f5", "repeat": 2, "fold": 5, "seed": 1750, "test_hash": "02d0b2c8b306", "dataset": "nhanes", "task": "surv", "method": "SHAPBoost-tree", "code_version": "9309a8e", "status": "ok", "features": [1, 0, 60, 61, 50, 39, 76, 71, 78, 30, 44, 4, 27, 26, 3, 2, 36, 7], "n_selected": 18, "wall_seconds": 43354.70887403283, "cpu_seconds": 43068.974128332}

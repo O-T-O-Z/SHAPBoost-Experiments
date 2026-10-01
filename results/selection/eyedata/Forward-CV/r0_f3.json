@@ -1,0 +1,1 @@
+{"split_id": "r0_f3", "repeat": 0, "fold": 3, "seed": 84, "test_hash": "5e90726de977", "dataset": "eyedata", "task": "reg", "method": "Forward-CV", "code_version": "5be316b", "status": "ok", "features": [152, 103, 106, 35, 115, 134, 156, 70, 98, 148, 190, 139, 59, 15, 173, 178, 102, 198], "n_selected": 18, "wall_seconds": 14.068484739982523, "cpu_seconds": 13.913243537}

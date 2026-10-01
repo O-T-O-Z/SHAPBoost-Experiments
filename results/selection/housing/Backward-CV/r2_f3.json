@@ -1,0 +1,1 @@
+{"split_id": "r2_f3", "repeat": 2, "fold": 3, "seed": 1750, "test_hash": "cca9ade32c81", "dataset": "housing", "task": "reg", "method": "Backward-CV", "code_version": "5be316b", "status": "ok", "features": [0, 7, 6, 3, 2, 1, 4], "n_selected": 7, "wall_seconds": 0.4360627179266885, "cpu_seconds": 0.4317795360000005}

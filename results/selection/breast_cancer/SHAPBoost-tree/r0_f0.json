@@ -1,0 +1,1 @@
+{"split_id": "r0_f0", "repeat": 0, "fold": 0, "seed": 84, "test_hash": "bb1355f88c7f", "dataset": "breast_cancer", "task": "surv", "method": "SHAPBoost-tree", "code_version": "9309a8e", "status": "ok", "features": [9, 66, 6], "n_selected": 3, "wall_seconds": 62.073311056010425, "cpu_seconds": 61.293144984}

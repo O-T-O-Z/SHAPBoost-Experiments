@@ -1,0 +1,1 @@
+{"split_id": "r2_f1", "repeat": 2, "fold": 1, "seed": 1750, "test_hash": "342ff7217c1c", "dataset": "eyedata", "task": "reg", "method": "RReliefF", "code_version": "5be316b", "status": "ok", "features": [130, 146, 125, 100, 95, 195], "n_selected": 6, "wall_seconds": 1.483778591034934, "cpu_seconds": 1.3841677570000002}

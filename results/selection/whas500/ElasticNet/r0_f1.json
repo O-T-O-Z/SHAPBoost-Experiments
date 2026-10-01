@@ -1,0 +1,1 @@
+{"split_id": "r0_f1", "repeat": 0, "fold": 1, "seed": 84, "test_hash": "943d5ddd86da", "dataset": "whas500", "task": "surv", "method": "ElasticNet", "code_version": "5be316b", "status": "ok", "features": [1, 4, 3, 8, 12, 6, 11, 7, 0, 2, 10], "n_selected": 11, "wall_seconds": 0.36108564492315054, "cpu_seconds": 0.3583792290000005}

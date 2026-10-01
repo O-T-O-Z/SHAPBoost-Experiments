@@ -1,0 +1,1 @@
+{"split_id": "r2_f1", "repeat": 2, "fold": 1, "seed": 1750, "test_hash": "f543f4e6f625", "dataset": "metabric_regression", "task": "reg", "method": "Boruta", "code_version": "5be316b", "status": "ok", "features": [1, 2, 666, 494], "n_selected": 4, "wall_seconds": 655.4015213958919, "cpu_seconds": 649.541189769}

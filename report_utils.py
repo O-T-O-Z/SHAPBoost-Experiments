@@ -32,9 +32,14 @@ METRIC_LABEL = {"R2": "R$^2$", "MAE": "MAE", "C-index": "C-index"}
 DEFAULT_YLIM = {"R2": (0.0, 1.0), "C-index": (0.45, 0.9)}  # as in the original figures
 
 # Point 3/4 method names -> the names used in the paper. Point-2 names already match.
+# Baseline names as used in the supplementary tables (figures and tables must match).
+_BASELINES = {"MRMR": "mRMR", "Forward-CV": "Forward (CV)", "Backward-CV": "Backward (CV)",
+              "CIndexBoost-StabSel": "C-index boosting + stability selection"}
 _DISPLAY = {
-    "reg": {"SHAPBoost": "SHAPBoost (LR)", "SHAPBoost (GBR/RSF)": "SHAPBoost (GBR)"},
-    "surv": {"SHAPBoost": "SHAPBoost (CoxPH)", "SHAPBoost (GBR/RSF)": "SHAPBoost (RSF)"},
+    "reg": {"SHAPBoost": "SHAPBoost (LR)", "SHAPBoost-tree": "SHAPBoost (GBR)",
+            **_BASELINES, "ElasticNet": "Elastic net"},
+    "surv": {"SHAPBoost": "SHAPBoost (CoxPH)", "SHAPBoost-tree": "SHAPBoost (RSF)",
+             **_BASELINES, "ElasticNet": "Elastic net (Cox)", "Lasso": "Lasso (Cox)"},
 }
 MAIN = {"reg": "SHAPBoost (LR)", "surv": "SHAPBoost (CoxPH)"}
 TREE = {"reg": "SHAPBoost (GBR)", "surv": "SHAPBoost (RSF)"}

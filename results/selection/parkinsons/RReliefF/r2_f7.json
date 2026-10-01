@@ -1,0 +1,1 @@
+{"split_id": "r2_f7", "repeat": 2, "fold": 7, "seed": 1750, "test_hash": "070597ec9412", "dataset": "parkinsons", "task": "reg", "method": "RReliefF", "code_version": "5be316b", "status": "ok", "features": [0, 16, 15, 14, 17, 3, 8, 2, 7, 6, 4, 13, 1, 10, 9, 12, 5, 11, 18], "n_selected": 19, "wall_seconds": 18.999218572862446, "cpu_seconds": 18.685796833}
